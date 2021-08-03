@@ -29,7 +29,7 @@ public class Player : LivingEntity
     private float dodgeCooldownTime = .3f;
     private float attackPower = 35f;
 
-    private float dodgeAttackDistanceCoef = 2f;
+    private float dodgeAttackDistanceCoef = .9f;
 
     Vector3 attackPoint; // Player 공격 방향 (최근 마우스 클릭 좌표)
     Vector3 inputDirection; // Player 누르고 있는 키보드 방향
@@ -243,6 +243,7 @@ public class Player : LivingEntity
         basicAttackParticlePool.Enqueue(attackParticle);
     }
     void DodgeAttack(Vector3 point) {
+        canDodge = false;
         StopCoroutine(dodgeCoroutine); // 회피를 진행하던 코루틴 중단
         
         attackPoint = new Vector3(point.x, 0, point.z);
@@ -266,7 +267,7 @@ public class Player : LivingEntity
         }
     }
     public void DodgeAttackHit() {
-        Collider[] targets = Physics.OverlapBox(transform.position + playerModel.transform.forward, new Vector3(.4f, 1f, 2f), playerModel.transform.rotation, 1 << LayerMask.NameToLayer("Damagable"));
+        Collider[] targets = Physics.OverlapBox(transform.position + playerModel.transform.forward * 2f, new Vector3(.4f, 1f, 2f), playerModel.transform.rotation, 1 << LayerMask.NameToLayer("Damagable"));
         playerAnimator.SetBool("Dodge Attack", false);
         
         if(targets.Length > 0) playerSoundManager.PlaySound(playerSoundManager.dodgeAttackHitSound);

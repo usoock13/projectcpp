@@ -11,7 +11,7 @@ public class PlayerInput : MonoBehaviour
         WatchMove();
     }
     void Update() {
-        if(Input.GetButton("Fire1")) InputBasicAttack(); // 일반 공격
+        if(Input.GetButtonDown("Fire1")) InputBasicAttack(); // 일반 공격
         if(Input.GetButton("Fire2")) InputSpecialAttack(); // 특수 공격
         if(Input.GetButtonDown("Dodge")) InputDodge(); // 회피
     }
