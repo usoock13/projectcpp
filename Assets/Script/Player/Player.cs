@@ -22,7 +22,7 @@ public class Player : LivingEntity
     private bool canAttack = true;
     private bool canDodge = true;
 
-    private bool canInputEarlyBasicAttack = false;
+    private bool canInputEarlyBasicAttack = false; // 선입력 가능 타이밍 구분용 변수
 
     private float moveSpeed = 5f; // Player 이동속도
     private float dodgeCoefficient = 2.5f;
@@ -94,9 +94,10 @@ public class Player : LivingEntity
                                 // 두 번째 회피가 첫 번째 회피를 중단시키고 작동하기 위해 이를 위한 코루틴 변수를 선언 (StopCoroutine 사용)
     public void Dodge() {
         if(!canDodge) return; // 닷지 가능 여부 확인
+        print("Dodge");
         playerState = playerState==PlayerState.Dodge ? PlayerState.SecondDodge : PlayerState.Dodge;
         playerAnimator.SetBool("Move", false); // Dodge 애니메이션 종료 후 방향키 입력 여부와 무관하게 Move 애니메이션이 실행되는 것을 막음
-        playerAnimator.SetTrigger("Dodge"); // 애니메이션 시작
+        playerAnimator.SetBool("Dodge", true); // 애니메이션 시작
         playerSoundManager.PlaySound(playerSoundManager.dodgeSound); //Dodge 사운드 출력
 
         canMove = false; // 일반 이동 불가능
@@ -120,6 +121,9 @@ public class Player : LivingEntity
             yield return new WaitForFixedUpdate();
         }
     }
+    public void DodgeStart() { // 애니메이션 이벤트 핸들러 (회피 시작 시점)
+        playerAnimator.SetBool("Dodge", false);
+    }
     public void DodgeEnd() { // 애니메이션 이벤트 핸들러 (회피 종료 시점)
         playerState = PlayerState.Idle;
         canMove = true;
@@ -134,16 +138,13 @@ public class Player : LivingEntity
 
     IEnumerator attackMoveCoroutine;
     public void BasicAttack(Vector3 point) {
-        if(playerState == PlayerState.Dodge || playerState == PlayerState.SecondDodge) {
-            DodgeAttack(point);
-            return;
-        }
         if(!canAttack) return; // 공격 불가능 상태일 경우 반환(탈출)
+        print(canAttack);
         attackPoint = new Vector3(point.x, 0, point.z); // 공격 목적지 (마우스로 클릭한 지점)
 
         if(playerState != PlayerState.BasicAttack) {
-            playerState = PlayerState.BasicAttack; // Player 현재 상태를 공격으로 변경
             canMove = false;
+            playerState = PlayerState.BasicAttack; // Player 현재 상태를 공격으로 변경
             playerAnimator.SetTrigger("Basic Attack"); // Player Animator의 Basic Attack 애니메이션 재생
         } else {
             if(canInputEarlyBasicAttack) {
@@ -185,7 +186,7 @@ public class Player : LivingEntity
     public void BasicAttackStart() {
         StartCoroutine(AttackMove(inputDirection.normalized * 2f, .35f));
         playerModel.transform.LookAt(attackPoint); // 공격 방향을 바라보기 (Player Model)
-    } 
+    }
 
     public override void OnDamage(float amount, Vector3 originDirection) {
         base.OnDamage(amount, originDirection);
@@ -242,7 +243,8 @@ public class Player : LivingEntity
         attackParticle.transform.SetParent(transform.Find("Player Particle Parent"));
         basicAttackParticlePool.Enqueue(attackParticle);
     }
-    void DodgeAttack(Vector3 point) {
+    public void DodgeAttack(Vector3 point) {
+        print("DA");
         canDodge = false;
         StopCoroutine(dodgeCoroutine); // 회피를 진행하던 코루틴 중단
         
@@ -252,7 +254,6 @@ public class Player : LivingEntity
         StartCoroutine(DodgeAttackMove(point));
         
         playerAnimator.SetTrigger("Dodge Attack");
-        playerAnimator.SetBool("Dodge", false);
         playerSoundManager.PlaySound(playerSoundManager.dodgeAttackSound);
         
     }

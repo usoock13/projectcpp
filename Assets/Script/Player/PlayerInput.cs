@@ -24,7 +24,17 @@ public class PlayerInput : MonoBehaviour
     void InputBasicAttack() {
         RaycastHit hit;
         if(Physics.Raycast(Camera.main.ScreenPointToRay(Input.mousePosition), out hit, Mathf.Infinity, 1 << 8)) {
-            playerInstance.BasicAttack(hit.point);
+            switch(playerInstance.playerState) {
+                case PlayerState.Dodge :
+                case PlayerState.SecondDodge :
+                    playerInstance.DodgeAttack(hit.point);
+                    break;
+                case PlayerState.Idle :
+                case PlayerState.Move :
+                case PlayerState.BasicAttack :
+                    playerInstance.BasicAttack(hit.point);
+                    break;
+            }
         }
     }
     void InputSpecialAttack() {

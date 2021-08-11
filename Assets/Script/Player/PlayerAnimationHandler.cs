@@ -22,6 +22,9 @@ public class PlayerAnimationHandler : MonoBehaviour
     void DodgeEnd() {
         playerInstance.DodgeEnd();
     }
+    void DodgeStart() {
+        playerInstance.DodgeStart();
+    }
     void HitEnd() {
         playerInstance.HitEnd();
     }
