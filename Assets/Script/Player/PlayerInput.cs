@@ -38,7 +38,10 @@ public class PlayerInput : MonoBehaviour
         }
     }
     void InputSpecialAttack() {
-
+        RaycastHit hit;
+        if(Physics.Raycast(Camera.main.ScreenPointToRay(Input.mousePosition), out hit, Mathf.Infinity, 1 << 8)) {
+            playerInstance.SpecialAttack(hit.point);
+        }
     }
     void InputDodge() {
         playerInstance.Dodge();

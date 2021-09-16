@@ -7,41 +7,39 @@ public enum PlayerState {
 }
 public class Player : LivingEntity
 {
-    [SerializeField]
-    private GameObject playerModel; // Player 캐릭터 모델
-    [SerializeField]
-    private Animator playerAnimator;
-    [SerializeField]
-    private PlayerSoundManager playerSoundManager;
-    [SerializeField]
-    private PlayerUI playerUI;
-    [SerializeField]
-    public PlayerState playerState { get; private set; } = PlayerState.Idle; // Player 현재 상태
+    [SerializeField] private GameObject playerModel; // Player 캐릭터 모델
+    [SerializeField] private Animator playerAnimator;
+    [SerializeField] private PlayerSoundManager playerSoundManager;
+    [SerializeField] private PlayerUI playerUI;
+    [SerializeField] public PlayerState playerState { get; private set; } = PlayerState.Idle; // Player 현재 상태
     private Rigidbody playerRigidbody;
-    private bool canMove = true; // Player는 현재 이동이 가능한 상태인가?
-    private bool canAttack = true;
-    private bool canDodge = true;
+    private bool canMove    = true; // Player는 현재 이동이 가능한 상태인가?
+    private bool canAttack  = true;
+    private bool canDodge   = true;
 
     private bool canInputEarlyBasicAttack = false; // 선입력 가능 타이밍 구분용 변수
 
-    private float moveSpeed = 5f; // Player 이동속도
-    private float dodgeCoefficient = 2.5f;
-    private float dodgeCooldownTime = .3f;
-    private float attackPower = 35f;
+    private float moveSpeed          = 5f; // Player 이동속도
+    private float dodgeCoefficient   = 2.5f;
+    private float dodgeCooldownTime  = .3f;
+    private float attackPower        = 35f;
 
     private float dodgeAttackDistanceCoef = .9f;
 
     Vector3 attackPoint; // Player 공격 방향 (최근 마우스 클릭 좌표)
     Vector3 inputDirection; // Player 누르고 있는 키보드 방향
 
-    [SerializeField]
-    Transform particlePointLeft;
-    [SerializeField]
-    Transform particlePointRight;
-    
+    ParticleDirector particleDirector;
+
+    [Header("이펙트(파티클 시스템)")]
+    [SerializeField] private Transform particlePointLeft;
+    [SerializeField] private Transform particlePointRight;
+    [SerializeField] private Transform dodgeParticlePoint;
+
     Queue<GameObject> basicAttackParticlePool = new Queue<GameObject>();
-    [SerializeField]
-    GameObject basicAttackParticle;
+    [SerializeField] GameObject basicAttackParticle;
+    [SerializeField] GameObject dodgeParticle;
+    Transform particleParent;
     
     new void Start() {
         base.Start();
@@ -52,18 +50,24 @@ public class Player : LivingEntity
         ParticleInitialize(10, basicAttackParticle);
 
         playerUI.PlayerHPBarUpdate(); // 플레이어 체력바 UI 초기화 
+        
+        particleParent = transform.Find("Player Particle Parent");
+
+        particleDirector = GetComponent<ParticleDirector>();
+        particleDirector.InitializeParticle("Basic Attack", basicAttackParticle, 10, particleParent);  // 기본(좌클릭) 공격 파티클 초기화
+        particleDirector.InitializeParticle("Dodge", dodgeParticle, 10, particleParent);  // 기본(좌클릭) 공격 파티클 초기화
     }
 
-    public Vector3 MoveVector(Vector3 direction) {
+    public Vector3 MoveVector(Vector3 direction) {  // 방향을 받아서 해당 방향을 검사하여, 충돌체가 있으면 이동을 막고, 비스듬한 경사를 향해 이동하면 경사면을 따라 이동하는 새로운 방향 벡터를 반환
         RaycastHit hit;
         if(Physics.BoxCast(
-            (transform.position + new Vector3(0, .5f, 0)) - (direction.normalized * .7f), // BoxCast 시작 지점
-            new Vector3(.25f, .1f, .25f), // BoxCast 박스 크기
-            direction.normalized, // BoxCast 박스 진행 방향
-            out hit, // BoxCast RaycastHit 정보
-            playerModel.transform.rotation, // BoxCast 박스 방향
-            .7f, // BoxCast 박스 진행 거리
-            LayerMask.GetMask("Block Move"))) // BoxCast 확인할 레이어
+            transform.position + new Vector3(0, 0.5f, 0) - (direction.normalized * 0.7f),   /* BoxCast 시작 지점 */
+            new Vector3(.25f, 0.1f, .25f),                                                  /* BoxCast 박스 크기 */
+            direction.normalized,                                                           /* BoxCast 박스 진행 방향 */
+            out hit,                                                                        /* BoxCast RaycastHit 정보 */
+            playerModel.transform.rotation,                                                 /* BoxCast 박스 방향 */
+            0.7f,                                                                           /* BoxCast 박스 진행 거리 */
+            LayerMask.GetMask("Block Move")))                                               /* BoxCast 확인할 레이어 */
         {
             Vector3 normal = new Vector3(hit.normal.x, 0, hit.normal.z);
             float angle = Mathf.Round(Vector3.Angle(direction, Quaternion.AngleAxis(90, Vector3.up) * normal) - 90);
@@ -74,27 +78,27 @@ public class Player : LivingEntity
             return direction;
         }
     }
+
     public void PlayerMove(Vector3 direction) {
-        inputDirection = Quaternion.AngleAxis(45f, Vector3.up) * direction;
-        if(playerState == PlayerState.Idle || playerState == PlayerState.Move) canMove = true; // Player의 현재 상태가 Idel, Move 중 하나라면 이동 가능한 상태로 복귀
-        if(canMove) {
-            if(inputDirection == Vector3.zero) playerAnimator.SetBool("Move", false); // 입력받는 이동 값이 없어, direction이 (0, 0, 0)으로 들어올 경우, Player Animator의 Move 애니메이션 비활성화
-            else {
-                playerModel.transform.localRotation = Quaternion.LookRotation(direction);
-                playerRigidbody.MovePosition(transform.position + MoveVector(inputDirection) * moveSpeed * Time.deltaTime);
-                playerAnimator.SetBool("Move", true); // Player Animator의 Move 애니메이션 재생
-                playerState = PlayerState.Move; // Player 현재 상태를 이동으로 변경
-            }
+        inputDirection = Quaternion.AngleAxis(45f, Vector3.up) * direction; // 입력 값을 45deg 회전 (because 쿼터뷰)
+        if(playerState == PlayerState.Idle || playerState == PlayerState.Move) { canMove = true; } // Player의 현재 상태가 Idle, Move 중 하나라면 이동 가능한 상태로 복귀
+
+        if(!canMove) { return; }   // Player가 이동 가능한 상태인지 체크
+        
+        if(inputDirection == Vector3.zero) {
+            playerAnimator.SetBool("Move", false);  // 입력받는 이동 값이 없어, direction이 (0, 0, 0)으로 들어올 경우, Player Animator의 Move 애니메이션 비활성화
         } else {
-            return; // Player가 이동 가능한 상태인지 체크
+            playerModel.transform.localRotation = Quaternion.LookRotation(direction);
+            playerRigidbody.MovePosition(transform.position + MoveVector(inputDirection) * moveSpeed * Time.deltaTime);
+            playerAnimator.SetBool("Move", true); // Player Animator의 Move 애니메이션 재생
+            playerState = PlayerState.Move; // Player 현재 상태를 이동으로 변경
         }
     }
     // 회피 관련 메소드 >>
     IEnumerator dodgeCoroutine; // 회피는 두 번 까지 연속으로 사용 가능 / 회피의 이동 처리는 코루틴으로 처리
                                 // 두 번째 회피가 첫 번째 회피를 중단시키고 작동하기 위해 이를 위한 코루틴 변수를 선언 (StopCoroutine 사용)
     public void Dodge() {
-        if(!canDodge) return; // 닷지 가능 여부 확인
-        print("Dodge");
+        if(!canDodge) { return; } // 닷지 가능 여부 확인
         playerState = playerState==PlayerState.Dodge ? PlayerState.SecondDodge : PlayerState.Dodge;
         playerAnimator.SetBool("Move", false); // Dodge 애니메이션 종료 후 방향키 입력 여부와 무관하게 Move 애니메이션이 실행되는 것을 막음
         playerAnimator.SetBool("Dodge", true); // 애니메이션 시작
@@ -106,6 +110,11 @@ public class Player : LivingEntity
 
         if(dodgeCoroutine != null) StopCoroutine(dodgeCoroutine);
         dodgeCoroutine = DodgeMove(playerState);
+        try {
+            particleDirector.ActiveParticle("Dodge", 2.5f, dodgeParticlePoint, dodgeParticlePoint).GetComponent<TraceParticle>().centerTransform = playerModel.transform;
+        } catch {
+            Debug.LogError("적절한 파티클을 활성화하지 못했습니다.");
+        }
         StartCoroutine(dodgeCoroutine);
     }
     IEnumerator DodgeMove(PlayerState dodgeState) {
@@ -138,8 +147,7 @@ public class Player : LivingEntity
 
     IEnumerator attackMoveCoroutine;
     public void BasicAttack(Vector3 point) {
-        if(!canAttack) return; // 공격 불가능 상태일 경우 반환(탈출)
-        print(canAttack);
+        if(!canAttack) { return; } // 공격 불가능 상태일 경우 반환(탈출)
         attackPoint = new Vector3(point.x, 0, point.z); // 공격 목적지 (마우스로 클릭한 지점)
 
         if(playerState != PlayerState.BasicAttack) {
@@ -176,17 +184,19 @@ public class Player : LivingEntity
 
             Transform particlePoint = attackOrder%2==0 ? particlePointRight : particlePointLeft;
             Vector3 particlePosition = target.GetComponent<Collider>() ? target.GetComponent<Collider>().ClosestPoint(particlePoint.position) : particlePoint.position;
-            GameObject attackParticle = 
-                basicAttackParticlePool.Count>0 
-                ? basicAttackParticlePool.Dequeue() 
-                : GameObject.Instantiate(basicAttackParticle,  particlePosition, particlePoint.rotation);
-            StartCoroutine(ActiveParticle(attackParticle, 2.5f, particlePoint));
+            particleDirector.ActiveParticle("Basic Attack", 2.5f, particlePosition, particlePoint.rotation, particleParent);
         }
     }
     public void BasicAttackStart() {
         StartCoroutine(AttackMove(inputDirection.normalized * 2f, .35f));
         playerModel.transform.LookAt(attackPoint); // 공격 방향을 바라보기 (Player Model)
     }
+
+    // Special Attack >> 
+    public void SpecialAttack(Vector3 point) {
+        // Base Mode는 Special Attack 없음
+    }
+    // << Special Attack 
 
     public override void OnDamage(float amount, Vector3 originDirection) {
         base.OnDamage(amount, originDirection);
@@ -244,7 +254,6 @@ public class Player : LivingEntity
         basicAttackParticlePool.Enqueue(attackParticle);
     }
     public void DodgeAttack(Vector3 point) {
-        print("DA");
         canDodge = false;
         StopCoroutine(dodgeCoroutine); // 회피를 진행하던 코루틴 중단
         
@@ -274,11 +283,7 @@ public class Player : LivingEntity
         if(targets.Length > 0) playerSoundManager.PlaySound(playerSoundManager.dodgeAttackHitSound);
         foreach(Collider target in targets) {
             target.GetComponent<IDamageable>().OnDamage(attackPower * 1.3f, transform.position);
-            GameObject attackParticle = 
-                basicAttackParticlePool.Count>0 
-                ? basicAttackParticlePool.Dequeue() 
-                : GameObject.Instantiate(basicAttackParticle, target.transform.position, particlePointRight.rotation);
-            StartCoroutine(ActiveParticle(attackParticle, 2.5f, target.transform.position, particlePointRight.rotation));
+            particleDirector.ActiveParticle("Basic Attack", 2.5f, particleParent);
         }
     }
 }
